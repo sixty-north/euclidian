@@ -1639,3 +1639,6 @@ def _(box, transform):
     # A new axis-aligned Box2 which bounds the transformed box
     return Box2.from_points(transform2(p) for p in box.vertices())
 
+
+def is_zero(value):
+    return value == 0
