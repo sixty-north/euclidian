@@ -5,7 +5,7 @@ from numbers import Real
 import sys
 from euclidian import gray
 from euclidian.cartesian import SpaceMismatchError, Cartesian
-from euclidian.cartesian2 import all_equal, sign, determinant_2, Box2, Point2, Vector2, Direction2
+from euclidian.cartesian2 import all_equal, is_zero, sign, determinant_2, Box2, Point2, Vector2, Direction2
 
 
 class Cartesian3(Cartesian):
@@ -1145,7 +1145,3 @@ class Plane3(Cartesian3):
 
     def is_degenerate(self):
         return self.a == 0.0 and self.b == 0.0 and self.c == 0.0
-
-
-def is_zero(value):
-    return value == 0
