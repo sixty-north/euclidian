@@ -1208,7 +1208,6 @@ class Plane3(Cartesian3):
 
     def is_degenerate(self):
         return self.a == 0.0 and self.b == 0.0 and self.c == 0.0
-
     def __repr__(self):
         return '{}(a={}, b={}, c={}, d={})'.format(self.__class__.__name__, *self._c)
 
