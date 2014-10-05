@@ -3,9 +3,10 @@ import math
 import itertools
 from numbers import Real
 import sys
-from euclidian import gray
 from euclidian.cartesian import SpaceMismatchError, Cartesian
-from euclidian.cartesian2 import all_equal, sign, determinant_2, Box2, Point2, Vector2, Direction2
+from euclidian.cartesian2 import determinant_2, Box2, Point2, Vector2, Direction2
+from euclidian.graycode import gray
+from euclidian.util import sign, is_zero, all_equal
 
 
 class Cartesian3(Cartesian):
@@ -932,7 +933,6 @@ class Segment3(Cartesian3):
         b = c1 / c2
         return self._p[0] + b * v
 
-
     def __eq__(self, rhs):
         if not isinstance(rhs, Segment3):
             return NotImplemented
@@ -1021,7 +1021,7 @@ class Plane3(Cartesian3):
     @classmethod
     def from_point_and_normal(cls, p, n):
         if p.space != n.space:
-            raise SpaceMismatchError("{!r} and {!r} are not in the same space".format(p, q))
+            raise SpaceMismatchError("{!r} and {!r} are not in the same space".format(p, n))
 
         dx = n[0]
         dy = n[1]
@@ -1047,6 +1047,7 @@ class Plane3(Cartesian3):
                                   point)
 
     def __init__(self, a, b, c, d, space=Cartesian3.DEFAULT_AXES):
+        """A plane defined by ax + by + cz + d = 0"""
         super().__init__(space)
         self._c = (a, b, c, d)
 
@@ -1073,7 +1074,7 @@ class Plane3(Cartesian3):
         base_i = self.base(0)
         base_j = self.base(1)
 
-        return  self._point() + i * base_i + j * base_j
+        return self._point() + i * base_i + j * base_j
 
     def _point(self):
         x = y = z = 0
@@ -1084,6 +1085,68 @@ class Plane3(Cartesian3):
         else:
             z = -self.d / self.c
         return Point3(x, y, z, space=self.space)
+
+    def _parse_solve_args(self, args, kwargs, first_axis_index, second_axis_index):
+        """Extract values from the supplied positional and keyword arguments according to axis names.
+        """
+        first_name = self.space[first_axis_index]
+        second_name = self.space[second_axis_index]
+        try:
+            x = kwargs[first_name] if first_name in kwargs else args[first_axis_index]
+            y = kwargs[second_name] if second_name in kwargs else args[second_axis_index]
+        except IndexError:
+            raise TypeError("At least {} coordinates must be provided for axes '{}' and '{}'".format(
+                self.dimensionality - 1, first_name, second_name))
+        return x, y
+
+    def _solve_for_2(self, *args, **kwargs):
+        """Solve for axis 2 (the z axis) providing coordinates for axis 0 and axis 1 as either positional or
+        named arguments consistent with space axis naming."""
+        x, y = self._parse_solve_args(args, kwargs, 0, 1)
+
+        a, b, c, d = self._c
+        if c == 0:
+            raise ZeroDivisionError("Cannot solve for plane parallel to axis")
+        z = -(a*x + b*y + d) / c
+        return z
+
+    def _solve_for_1(self, *args, **kwargs):
+        """Solve for axis 1 (the y axis) providing coordinates for axis 0 and axis 2 as either positional or
+        named arguments consistent with space axis naming."""
+        x, z = self._parse_solve_args(args, kwargs, 0, 2)
+        a, b, c, d = self._c
+        if b == 0:
+            raise ZeroDivisionError("Cannot solve for plane parallel to axis")
+        y = -(a*x + c*z + d) / b
+        return y
+
+    def _solve_for_0(self, *args, **kwargs):
+        """Solve for axis 0 (the x axis) providing coordinates for axis 1 and axis 2 as either positional or
+        named arguments consistent with space axis naming."""
+        y, z = self._parse_solve_args(args, kwargs, 1, 2)
+        a, b, c, d = self._c
+        if b == 0:
+            raise ZeroDivisionError("Cannot solve for plane parallel to axis")
+        x = -(b*y + c*z + d) / a
+        return x
+
+    def __getattr__(self, name):
+        if name.startswith('solve_for_'):
+            axis = name[10:]
+            try:
+                index = self.space.index(axis)
+            except ValueError:
+                pass
+            else:
+                if index == 0:
+                    return self._solve_for_0
+                elif index == 1:
+                    return self._solve_for_1
+                elif index == 2:
+                    return self._solve_for_2
+                assert False, "We never reach here."
+        raise AttributeError("'{}' object has no attribute '{}'".format(self.__class__.__name__, name))
+
 
     def distance_to(self, point):
         if point.space != self.space:
@@ -1146,6 +1209,6 @@ class Plane3(Cartesian3):
     def is_degenerate(self):
         return self.a == 0.0 and self.b == 0.0 and self.c == 0.0
 
+    def __repr__(self):
+        return '{}(a={}, b={}, c={}, d={})'.format(self.__class__.__name__, *self._c)
 
-def is_zero(value):
-    return value == 0

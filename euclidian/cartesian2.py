@@ -7,8 +7,9 @@ from functools import singledispatch, total_ordering
 from numbers import Real
 from enum import Enum, unique
 import itertools
-from euclidian import gray
+from euclidian import graycode
 from euclidian.cartesian import Cartesian, SpaceMismatchError
+from euclidian.util import sign, all_equal, is_zero
 
 
 @unique
@@ -25,8 +26,7 @@ class Sense(Enum):
     counterclockwise = +1
 
 
-def sign(x):
-    return (x > 0) - (x < 0)
+
 
 
 def determinant_2(d00, d01, d10, d11):
@@ -476,7 +476,7 @@ class Box2(Cartesian2):
                       space=self.space)
 
     def vertices(self):
-        return (self.vertex(*indices) for indices in gray(self.dimensionality))
+        return (self.vertex(*indices) for indices in graycode(self.dimensionality))
 
     def bottom_edge(self):
         return Segment2(self.bottom_left_vertex(),
@@ -685,11 +685,13 @@ class Line2(Cartesian2):
                       space=self.space)
 
     def _solve_for_0(self, y):
+        # TODO: Consider accepting named arguments corresponding to the space axis names
         if self.a == 0:
             raise ZeroDivisionError("Cannot solve horizontal line for _solve_for_0")
         return -self.b * y / self.a - self.c / self.a
 
     def _solve_for_1(self, x):
+        # TODO: Consider accepting named arguments corresponding to the space axis names
         if self.b == 0:
             raise ZeroDivisionError("Cannot solve for vertical line for _solve_for_1")
         return -self.a * x / self.b - self.c / self.b
@@ -1064,32 +1066,44 @@ class Triangle2(Cartesian2):
         return self._circumcenter
 
     def _circumcenter_3(self):
-        m1 = -(self.b[0] - self.a[0]) / (self.b[1] - self.a[1])
-        m2 = -(self.c[0] - self.b[0]) / (self.c[1] - self.b[1])
-        mx1 = (self.a[0] + self.b[0]) * 0.5
-        mx2 = (self.b[0] + self.c[0]) * 0.5
-        my1 = (self.a[1] + self.b[1]) * 0.5
-        my2 = (self.b[1] + self.c[1]) * 0.5
+        a = self.a
+        b = self.b
+        c = self.c
+        m1 = -(b[0] - a[0]) / (b[1] - a[1])
+        m2 = -(c[0] - b[0]) / (c[1] - b[1])
+        mx1 = (a[0] + b[0]) * 0.5
+        mx2 = (b[0] + c[0]) * 0.5
+        my1 = (a[1] + b[1]) * 0.5
+        my2 = (b[1] + c[1]) * 0.5
         xc = (m1 * mx1 - m2 * mx2 + my2 - my1) / (m1 - m2)
         return Point2(xc, m1 * (xc - mx1) + my1, space=self.space)
 
     def _circumcenter_2(self):
-        m1 = -(self.b[0] - self.a[0]) / (self.b[1] - self.a[1])
-        mx1 = (self.a[0] + self.b[0]) * 0.5
-        my1 = (self.a[1] + self.b[1]) * 0.5
-        xc = (self.c[0] + self.b[0]) * 0.5
+        a = self.a
+        b = self.b
+        c = self.c
+        m1 = -(b[0] - a[0]) / (b[1] - a[1])
+        mx1 = (a[0] + b[0]) * 0.5
+        my1 = (a[1] + b[1]) * 0.5
+        xc = (c[0] + b[0]) * 0.5
         return Point2(xc, m1 * (xc - mx1) + my1, space=self.space)
 
     def _circumcenter_1(self):
-        m2 = -(self.c[0] - self.b[0]) / (self.c[1] - self.b[1])
-        mx2 = (self.b[0] + self.c[0]) * 0.5
-        my2 = (self.b[1] + self.c[1]) * 0.5
-        xc = (self.b[0] + self.a[0]) * 0.5
+        a = self.a
+        b = self.b
+        c = self.c
+        m2 = -(c[0] - b[0]) / (c[1] - b[1])
+        mx2 = (b[0] + c[0]) * 0.5
+        my2 = (b[1] + c[1]) * 0.5
+        xc = (b[0] + a[0]) * 0.5
         return Point2(xc, m2 * (xc - mx2) + my2, space=self.space)
 
     def determinant(self):
-        return (self.a[0] * self.b[1] - self.a[0] * self.c[1] - self.b[0] * self.a[1] + self.b[0]
-                * self.c[1] - self.c[0] * self.b[1] + self.c[0] * self.a[1])
+        a = self.a
+        b = self.b
+        c = self.c
+        return (a[0] * b[1] - a[0] * c[1] - b[0] * a[1] + b[0]
+                * c[1] - c[0] * b[1] + c[0] * a[1])
 
     def signed_area(self):
         return self.determinant / 2.0
@@ -1167,8 +1181,11 @@ class Triangle2(Cartesian2):
         return self.length_a() * r, self.length_b() * s, self.length_c() * t
 
     def barycentric_to_cartesian(self, u, v, w):
-        return Point2(u * self.a[0] + v * self.b[0] + w * self.c[0],
-                      u * self.a[1] + v * self.b[1] + w * self.c[1],
+        a = self.a
+        b = self.b
+        c = self.c
+        return Point2(u * a[0] + v * b[0] + w * c[0],
+                      u * a[1] + v * b[1] + w * c[1],
                       space=self.space)
 
     def trilinear_to_cartesian(self, alpha, beta, gamma):
@@ -1178,23 +1195,26 @@ class Triangle2(Cartesian2):
     def cartesian_to_barycentric(self, p):
         if self.space != p.space:
             raise SpaceMismatchError("{!r} and {!r} are not in the same space".format(self, p))
-        dx = p[0] - self.c[0]
-        dy = p[1] - self.c[1]
-        u = (self.b[1] - self.c[1]) * dx + (self.c[0] - self.b[0]) * dy / self.determinant()
-        v = (self.c[1] - self.a[1]) * dx + (self.a[0] - self.c[0]) * dy / self.determinant()
+        a = self.a
+        b = self.b
+        c = self.c
+        dx = p[0] - c[0]
+        dy = p[1] - c[1]
+        u = (b[1] - c[1]) * dx + (c[0] - b[0]) * dy / self.determinant()
+        v = (c[1] - a[1]) * dx + (a[0] - c[0]) * dy / self.determinant()
         w = 1 - u - v
         return u, v, w
 
     def cartesian_to_trilinear(self, p):
-        a = self.b - self.c
-        b = self.a - self.c
         # p = alpha * a + beta * b
         # Use Cramer's rule here
         # px = alpha*ax + beta*bx
         # py = alpha*ay + beta*by
-        d = determinant_2(self.a[0], self.b[0], self.a[1], self.b[1])
-        dx = determinant_2(p[0], self.b[0], p[1], self.b[1])
-        dy = determinant_2(self.a[0], p[0], self.a[1], p[1])
+        a = self.a
+        b = self.b
+        d = determinant_2(a[0], b[0], a[1], b[1])
+        dx = determinant_2(p[0], b[0], p[1], b[1])
+        dy = determinant_2(a[0], p[0], a[1], p[1])
         alpha = dx / d
         beta = dy / d
         r = beta / self.length_a()
@@ -1243,24 +1263,6 @@ def _(segment, triangle):
     return any(segment.intersects(edge) for edge in triangle.edges())
 
 
-def all_equal(iterable):
-    iterator = iter(iterable)
-    try:
-        first = next(iterator)
-    except StopIteration:
-        raise ValueError("all_equal() cannot be used on an empty iterable series")
-
-    for item in iterator:
-        if item != first:
-            return False
-    return True
-
-
-def normalise(*args):
-    s = sum(args)
-    return tuple(arg / s for arg in args)
-
-
 class Circle2(Cartesian2):
 
     def __init__(self, center, radius):
@@ -1277,7 +1279,8 @@ class Circle2(Cartesian2):
         return self._radius
 
     def area(self):
-        return math.pi * self._radius * self._radius
+        radius = self._radius
+        return math.pi * radius * radius
 
     def bounding_box(self):
         return Box2.from_extents(self._center[0] - self.radius,
@@ -1324,9 +1327,9 @@ class TransformDecompositionError(Exception):
 
 class Transform2:
 
-    @classmethod
-    def identity(cls):
-        return cls(1, 1, 0, 0, 0, 0)  # TODO: Cache this
+    @staticmethod
+    def identity():
+        return IDENTITY_TRANSFORM2
 
     @classmethod
     def reflection_about(cls, line):
@@ -1591,6 +1594,8 @@ class Transform2:
 
     def is_identity(self):
         return self.a == 1 and self.c == 0 and self.b == 0 and self.d == 1 and self.tx == 0 and self.tx == 0
+
+IDENTITY_TRANSFORM2 = Transform2(1, 1, 0, 0, 0, 0)
 
 # TODO: Ensure these are in the right order, so we can reduce the transformations.
 Decomposition = namedtuple('Decomposition', ['translation', 'scaling', 'rotation', 'shearing'])
