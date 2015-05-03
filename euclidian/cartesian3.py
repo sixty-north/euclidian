@@ -998,24 +998,37 @@ class Plane3(Cartesian3):
 
     @classmethod
     def bisecting_planes(cls, p, q):
+        """Determine the bisector of two planes.
+
+        Args:
+            p, q: The two planes to be bisected.
+
+        Returns:
+            The plane bisecting planes p and q.
+
+        Raises:
+            SpaceMismatchError: If planes p and q are not in the same space.
+        """
         if p.space != q.space:
             raise SpaceMismatchError("{!r} and {!r} are not in the same space".format(p, q))
 
-        pa, pb, pc, pd = p._c
-        qa, qb, qc, qd = q._c
-        n1 = math.sqrt(pa*pa + pb*pb + pc*pc)
-        n2 = math.sqrt(qa*qa + qb*qb + qc*qc)
+        pa, pb, pc, pd = p.a, p.b, p.c, p.d
+        qa, qb, qc, qd = q.a, q.b, q.c, q.d
 
-        a = n2 * pa + n1 * qa
-        b = n2 * pb + n1 * qb
-        c = n2 * pc + n1 * qc
-        d = n2 * pd + n1 * qd
+        pn = math.sqrt(pa*pa + pb*pb + pc*pc)
+        qn = math.sqrt(qa*qa + qb*qb + qc*qc)
+
+        a = qn * pa + pn * qa
+        b = qn * pb + pn * qb
+        c = qn * pc + pn * qc
+        d = qn * pd + pn * qd
 
         if a == b == c == 0:
-            a = n2 * pa - n1 * qa
-            b = n2 * pb - n1 * qb
-            c = n2 * pc - n1 * qc
-            d = n2 * pd - n1 * qd
+            a = qn * pa - pn * qa
+            b = qn * pb - pn * qb
+            c = qn * pc - pn * qc
+            d = qn * pd - pn * qd
+
         return cls(a, b, c, d, space=p.space)
 
     @classmethod
@@ -1065,7 +1078,7 @@ class Plane3(Cartesian3):
 
     @property
     def d(self):
-        return self._c[2]
+        return self._c[3]
 
     def point(self, i=0, j=0):
         if i == 0 and j == 0:
@@ -1191,6 +1204,9 @@ class Plane3(Cartesian3):
                parallel to the plane formed by the 0 and 1 (i.e. x and y) axes; in other words it will
                be horizontal. The vector associated with index one will be orthogonal to the normal direction and the
                zeroth base vector.
+
+        Returns:
+            A base vector. There is no guarantee that the returned vector has unit length.
         """
         if index != 0 or index != 1:
             raise ValueError("Plane base vector index must be 0 or 1")
@@ -1208,6 +1224,7 @@ class Plane3(Cartesian3):
 
     def is_degenerate(self):
         return self.a == 0.0 and self.b == 0.0 and self.c == 0.0
+
     def __repr__(self):
         return '{}(a={}, b={}, c={}, d={})'.format(self.__class__.__name__, *self._c)
 
