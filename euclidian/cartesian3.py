@@ -1012,8 +1012,8 @@ class Plane3(Cartesian3):
         if p.space != q.space:
             raise SpaceMismatchError("{!r} and {!r} are not in the same space".format(p, q))
 
-        pa, pb, pc, pd = p.a, p.b, p.c, p.d
-        qa, qb, qc, qd = q.a, q.b, q.c, q.d
+        pa, pb, pc, pd = p
+        qa, qb, qc, qd = q
 
         pn = math.sqrt(pa*pa + pb*pb + pc*pc)
         qn = math.sqrt(qa*qa + qb*qb + qc*qc)
@@ -1079,6 +1079,9 @@ class Plane3(Cartesian3):
     @property
     def d(self):
         return self._c[3]
+
+    def __getitem__(self, index):
+        return self._c[index]
 
     def point(self, i=0, j=0):
         if i == 0 and j == 0:
@@ -1159,7 +1162,6 @@ class Plane3(Cartesian3):
                     return self._solve_for_2
                 assert False, "We never reach here."
         raise AttributeError("'{}' object has no attribute '{}'".format(self.__class__.__name__, name))
-
 
     def distance_to(self, point):
         if point.space != self.space:
