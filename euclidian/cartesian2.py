@@ -89,10 +89,17 @@ class Point2(Cartesian2):
         return self._p[index]
 
     def __sub__(self, rhs):
-        if not isinstance(rhs, Point2):
+        if not isinstance(rhs, (Point2, Vector2)):
             return NotImplemented
+
         if self.space != rhs.space:
             raise SpaceMismatchError("Different spaces")
+
+        if isinstance(rhs, Vector2):
+            return Point2(self._p[0] - rhs[0],
+                          self._p[1] - rhs[1],
+                          space=self.space)
+
         return Vector2(self._p[0] - rhs._p[0],
                        self._p[1] - rhs._p[1],
                        space=self.space)
