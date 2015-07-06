@@ -9,6 +9,7 @@ from enum import Enum, unique
 import itertools
 from euclidian import graycode
 from euclidian.cartesian import Cartesian, SpaceMismatchError
+from euclidian.graycode import gray
 from euclidian.util import sign, all_equal, is_zero
 
 
@@ -87,6 +88,12 @@ class Point2(Cartesian2):
 
     def __getitem__(self, index):
         return self._p[index]
+
+    def __len__(self):
+        return len(self._p)
+
+    def __iter__(self):
+        return iter(self._p)
 
     def __sub__(self, rhs):
         if not isinstance(rhs, (Point2, Vector2)):
@@ -201,6 +208,9 @@ class Vector2(Cartesian2):
 
     def __getitem__(self, index):
         return self._d[index]
+
+    def __len__(self):
+        return len(self._d)
 
     def __iter__(self):
         return iter(self._d)
@@ -478,12 +488,12 @@ class Box2(Cartesian2):
                       self.max[1])
 
     def vertex(self, i, j):
-        return Point2(self.p[i][0],
-                      self.p[j][1],
+        return Point2(self._p[i][0],
+                      self._p[j][1],
                       space=self.space)
 
     def vertices(self):
-        return (self.vertex(*indices) for indices in graycode(self.dimensionality))
+        return (self.vertex(*indices) for indices in gray(self.dimensionality))
 
     def bottom_edge(self):
         return Segment2(self.bottom_left_vertex(),
@@ -515,6 +525,9 @@ class Box2(Cartesian2):
 
     def __getitem__(self, index):
         return self._p[index]
+
+    def __len__(self):
+        return len(self._p)
 
     def __eq__(self, rhs):
         if not isinstance(rhs, Box2):
@@ -924,6 +937,9 @@ class Segment2(Cartesian2):
     def __getitem__(self, index):
         return self._p[index]
 
+    def __len__(self):
+        return len(self._p)
+
     def vector(self):
         return self.target - self.source
 
@@ -1040,6 +1056,9 @@ class Triangle2(Cartesian2):
 
     def __getitem__(self, index):
         return self._p[index]
+
+    def __len__(self):
+        return len(self._p)
 
     def incenter(self):
         if hasattr(self, '_incenter'):
@@ -1372,12 +1391,21 @@ class Transform2:
         tv = to_box.min - from_box.min
         return cls.identity().scale(sv, from_box.min).translate(tv)
 
-    def from_rotation(cls, angle, center=None):
-        return cls.identity().rotate(angle, center)
+    @classmethod
+    def from_rotation(cls, angle_radians, center=None):
 
+        return cls.identity().rotate(angle_radians, center)
+
+    @classmethod
+    def from_rotation_degrees(cls, angle_degrees, center=None):
+        return cls.identity().rotate_degrees(angle_degrees, center)
+
+    @classmethod
     def from_scale(cls, scale_factor, center=None):
+        # TODO: Optimise
         return cls.identity().scale(scale_factor, center)
 
+    @classmethod
     def from_translation(cls, vector):
         return cls(1, 0, 0, 1, vector[0], vector[1])
 
@@ -1403,10 +1431,12 @@ class Transform2:
 
     @property
     def tx(self):
+        # TODO: The name should reflect the space
         return self._m[0][2]
 
     @property
     def ty(self):
+        # TODO: The name should reflect the space
         return self._m[1][2]
 
     def __eq__(self, rhs):
@@ -1480,17 +1510,17 @@ class Transform2:
             return self.replace(a=self.a * s.x,
                                 c=self.c * s.x,
                                 b=self.b * s.y,
-                                d=self.c * s.y)
+                                d=self.d * s.y)
 
         v = center.vector()
         return self.translate(v).scale(scale_factor).translate(-v)
 
-    def rotate(self, angle, center=None):
+    def rotate(self, angle_radians, center=None):
         center = Point2(0, 0) if center is None else center
-        x = center.x
-        y = center.y
-        cos = math.cos(angle)
-        sin = math.sin(angle)
+        x = center[0]
+        y = center[1]
+        cos = math.cos(angle_radians)
+        sin = math.sin(angle_radians)
         tx = x - x * cos + y * sin
         ty = y - x * sin - y * cos
         a = self.a
@@ -1503,7 +1533,72 @@ class Transform2:
                           c=cos * c + sin * d,
                           d=-sin * c + cos * d,
                           tx=self.tx + (tx * a + ty * b),
-                          ty=self.ty + (ty * c + ty * d))
+                          ty=self.ty + (tx * c + ty * d))
+
+    def rotate_degrees(self, angle_degrees, center=None):
+        if angle_degrees % 90 == 0:
+            quadrant = int(angle_degrees) % 360
+            method = getattr(self, 'rotate_{}_degrees'.format(quadrant))
+            return method(center)
+        return self.rotate(math.radians(angle_degrees), center)
+
+    def rotate_0_degrees(self, center=None):
+        return self
+
+    def rotate_90_degrees(self, center=None):
+        center = Point2(0, 0) if center is None else center
+        x = center[0]
+        y = center[1]
+        tx = x + y
+        ty = y - x
+        a = self.a
+        b = self.b
+        c = self.c
+        d = self.d
+
+        return Transform2(a=b,
+                          b=-a,
+                          c=d,
+                          d=-c,
+                          tx=self.tx + (tx * a + ty * b),
+                          ty=self.ty + (tx * c + ty * d))
+
+    # TODO: rotate_180_degrees, rotate_270_degrees
+    def rotate_180_degrees(self, angle, center=None):
+        center = Point2(0, 0) if center is None else center
+        x = center[0]
+        y = center[1]
+        tx = x + x
+        ty = y + y
+        a = self.a
+        b = self.b
+        c = self.c
+        d = self.d
+
+        return Transform2(a=-a,
+                          b=b,
+                          c=-c,
+                          d=d,
+                          tx=self.tx + (tx * a + ty * b),
+                          ty=self.ty + (tx * c + ty * d))
+
+    def rotate_270_degrees(self, angle, center=None):
+        center = Point2(0, 0) if center is None else center
+        x = center[0]
+        y = center[1]
+        tx = x - y
+        ty = y + x
+        a = self.a
+        b = self.b
+        c = self.c
+        d = self.d
+
+        return Transform2(a=-b,
+                          b=a,
+                          c=-d,
+                          d=c,
+                          tx=self.tx + (tx * a + ty * b),
+                          ty=self.ty + (tx * c + ty * d))
 
     def shear(self, shear_factor, center=None):
         if center is None:
@@ -1602,7 +1697,7 @@ class Transform2:
     def is_identity(self):
         return self.a == 1 and self.c == 0 and self.b == 0 and self.d == 1 and self.tx == 0 and self.tx == 0
 
-IDENTITY_TRANSFORM2 = Transform2(1, 1, 0, 0, 0, 0)
+IDENTITY_TRANSFORM2 = Transform2(1, 0, 0, 1, 0, 0)
 
 # TODO: Ensure these are in the right order, so we can reduce the transformations.
 Decomposition = namedtuple('Decomposition', ['translation', 'scaling', 'rotation', 'shearing'])
