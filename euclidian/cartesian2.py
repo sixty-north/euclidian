@@ -193,9 +193,6 @@ class Vector2(Cartesian2):
         self._d = (dx, dy)
 
     def map(self, f, *items, space=None):
-        if not all_equal(vector.space for vector in itertools.chain([self], items)):
-            raise SpaceMismatchError("Not all vectors are in the same space")
-        #return Vector2(*(map(f, *args) for args in zip(self, *items)), space=self.space)
         return Vector2(*list(itertools.starmap(f, zip(self, *items))),
                        space=space if space is not None else self.space)
 
@@ -1564,7 +1561,7 @@ class Transform2:
                           ty=self.ty + (tx * c + ty * d))
 
     # TODO: rotate_180_degrees, rotate_270_degrees
-    def rotate_180_degrees(self, angle, center=None):
+    def rotate_180_degrees(self, center=None):
         center = Point2(0, 0) if center is None else center
         x = center[0]
         y = center[1]
@@ -1576,13 +1573,13 @@ class Transform2:
         d = self.d
 
         return Transform2(a=-a,
-                          b=b,
+                          b=-b,
                           c=-c,
-                          d=d,
+                          d=-d,
                           tx=self.tx + (tx * a + ty * b),
                           ty=self.ty + (tx * c + ty * d))
 
-    def rotate_270_degrees(self, angle, center=None):
+    def rotate_270_degrees(self, center=None):
         center = Point2(0, 0) if center is None else center
         x = center[0]
         y = center[1]
