@@ -17,6 +17,10 @@ def gray(nbits):
 
         yield tuple(code)
 
+def signed_gray(nbits):
+    """Generate a gray code as a tupe of -1 and +1 integers."""
+    for code in gray(nbits):
+        yield tuple(-1 + 2*c for c in code)
 
 if __name__ == '__main__':
     print(list(gray(4)))
