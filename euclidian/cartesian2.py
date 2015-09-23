@@ -76,7 +76,7 @@ class Point2(Cartesian2):
             x = kwargs[self.space[0]] if self.space[0] in kwargs else args[0]
             y = kwargs[self.space[1]] if self.space[1] in kwargs else args[1]
         except IndexError:
-            raise TypeError("A least {} coordinates must be provided".format(self.dimensionality))
+            raise TypeError("Exactly {} coordinates must be provided".format(self.dimensionality))
         self._p = (x, y)
 
     def __getattr__(self, axis):
@@ -129,8 +129,6 @@ class Point2(Cartesian2):
         return super().__eq__(rhs) and self._p == rhs._p
 
     def map(self, f, *items, space=None):
-        if not all_equal(item.space for item in itertools.chain([self], items)):
-            raise SpaceMismatchError("Not all vectors are in the same space")
         return Point2(*list(itertools.starmap(f, zip(self, *items))),
                       space=space if space is not None else self.space)
 
@@ -189,7 +187,7 @@ class Vector2(Cartesian2):
             dx = kwargs[x_name] if x_name in kwargs else args[0]
             dy = kwargs[y_name] if y_name in kwargs else args[1]
         except IndexError:
-            raise TypeError("A least {} coordinates must be provided".format(self.dimensionality))
+            raise TypeError("Exactly {} coordinates must be provided".format(self.dimensionality))
         self._d = (dx, dy)
 
     def map(self, f, *items, space=None):
@@ -861,6 +859,7 @@ class Ray2(Cartesian2):
         return Ray2.from_source_and_vector(self.source, self.source - self.point)
 
     def lerp(self, t):
+        # TODO: Consider using this version which is more numerically stable lerp(p0, p1, t) = p0 * (1 - t) + p1 * t
         u = (self.point - self.source).unit()
         return self.source + u * t
 
@@ -958,6 +957,7 @@ class Segment2(Cartesian2):
         return Segment2(self.target, self.source)
 
     def lerp(self, t):
+        # TODO: Consider using this version which is more numerically stable lerp(p0, p1, t) = p0 * (1 - t) + p1 * t
         return Point2(self.source[0] + t * (self.target[0] - self.source[0]),
                       self.source[1] + t * (self.target[1] - self.source[1]),
                       space=self.space)

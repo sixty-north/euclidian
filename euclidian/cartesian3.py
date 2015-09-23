@@ -781,6 +781,7 @@ class Ray3(Cartesian3):
         return Ray3.from_source_and_vector(self.source, self.source - self.point)
 
     def lerp(self, t):
+        # TODO: Consider using this version which is more numerically stable lerp(p0, p1, t) = p0 * (1 - t) + p1 * t
         u = (self.point - self.source).unit()
         return self.source + u * t
 
@@ -884,6 +885,7 @@ class Segment3(Cartesian3):
         return Segment3(self.target, self.source)
 
     def lerp(self, t):
+        # TODO: Consider using this version which is more numerically stable lerp(p0, p1, t) = p0 * (1 - t) + p1 * t
         return Point3(self.source[0] + t * (self.target[0] - self.source[0]),
                       self.source[1] + t * (self.target[1] - self.source[1]),
                       self.source[2] + t * (self.target[2] - self.source[2]),
