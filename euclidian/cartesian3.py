@@ -310,6 +310,10 @@ class Vector3(Cartesian3):
     # def angle(self, rhs):
     #     return math.atan2(abs(self.determinant(rhs)), self.dot(rhs))
 
+    def angle(self, rhs):
+         theta = math.acos(self.dot(rhs) / (self.magnitude() * rhs.magnitude()))
+         return theta
+
     def components(self):
         """Decompose into three component vectors parallel to the basis vectors.
 
@@ -384,6 +388,8 @@ class Direction3(Cartesian3):
             dz = kwargs[z_name] if z_name in kwargs else args[2]
         except IndexError:
             raise TypeError("A least {} coordinates must be provided".format(self.dimensionality))
+        if dx == dy == dz == 0:
+            raise ValueError("Degenerate {}".format(self.__class__.__name__))
         self._d = (dx, dy, dz)
 
     def __getattr__(self, axis):
@@ -423,7 +429,23 @@ class Direction3(Cartesian3):
     def __repr__(self):
         return "{}({})".format(
             self.__class__.__name__,
-            ', '.join('{}={}'.format(axis, coord) for axis, coord in zip(self.space, self._p)))
+            ', '.join('{}={}'.format(axis, coord) for axis, coord in zip(self.space, self._d)))
+
+    def angle(self, rhs):
+        return self.vector().angle(rhs.vector())
+
+    def scalar_projection(self, vector):
+        """Scalar projection onto this direction."""
+        return self.vector().unit().dot(vector)
+
+    def vector_projection(self, vector):
+        """The projection of a vector onto this direction.
+        """
+        unit = self.vector().unit()
+        return unit.dot(vector) * unit
+
+    def vector_rejection(self, vector):
+        return vector - self.vector_projection(vector)
 
     def subspace(self, subspace_axes):
         """Obtain a two-dimensional subspace representation of this vector.
@@ -1236,3 +1258,326 @@ class Plane3(Cartesian3):
     def __repr__(self):
         return '{}(a={}, b={}, c={}, d={})'.format(self.__class__.__name__, *self._c)
 
+
+class Transform3:
+
+    @staticmethod
+    def identity():
+        return IDENTITY_TRANSFORM3
+
+    # @classmethod
+    # def from_rotation(cls, angle_radians, axis):
+    #      cos_theta = math.cos(angle_radians)
+    #      sin_theta = math.sin(angle_radians)
+    #
+    #      unit_axis = axis.unit()
+    #      l = unit_axis[0]
+    #      m = unit_axis[1]
+    #      n = unit_axis[2]
+    #
+    #      a = l*l*(1 - cos_theta) + cos_theta
+    #      b = l*m*(1 - cos_theta) + n*sin_theta
+    #      c = l*n*(1 - cos_theta) - m*sin_theta
+    #
+    #      d = m*l*(1 - cos_theta) - n*sin_theta
+    #      e = m*m*(1 - cos_theta) + cos_theta
+    #      f = m*n*(1 - cos_theta) + l*sin_theta
+    #
+    #      g = n*l*(1 - cos_theta) + m*sin_theta
+    #      h = n*m*(1 - cos_theta) - l*sin_theta
+    #      i = n*n*(1 - cos_theta) + cos_theta
+    #
+    #      return cls(a, d, g, b, e, h, c, f, i, 0, 0, 0)
+
+
+    @classmethod
+    def from_rotation(cls, angle_radians, axis):
+         cos_theta = math.cos(angle_radians)
+         sin_theta = math.sin(angle_radians)
+
+         unit_axis = axis.unit()
+         u = unit_axis[0]
+         v = unit_axis[1]
+         w = unit_axis[2]
+
+         a = u*u + (1 - u*u)*cos_theta
+         b = u*v*(1 - cos_theta) + w*sin_theta
+         c = u*w*(1 - cos_theta) - v*sin_theta
+
+         d = u*v*(1 - cos_theta) - w*sin_theta
+         e = v*v + (1 - v*v)*cos_theta
+         f = v*w*(1 - cos_theta) + u*sin_theta
+
+         g = u*w*(1 - cos_theta) + v*sin_theta
+         h = v*w*(1 - cos_theta) - u*sin_theta
+         i = w*w + (1 - w*w)*cos_theta
+
+         return cls(a, d, g, b, e, h, c, f, i, 0, 0, 0)
+
+    @classmethod
+    def from_rotation_degrees(cls, angle_degrees, axis):
+        return cls.from_rotation(math.radians(angle_degrees), axis)
+
+    @classmethod
+    def from_rotation_x(cls, angle_radians):
+        return cls.identity().rotate_x(angle_radians)
+
+    @classmethod
+    def from_rotation_y(cls, angle_radians):
+        return cls.identity().rotate_y(angle_radians)
+
+    @classmethod
+    def from_rotation_z(cls, angle_radians):
+        return cls.identity().rotate_z(angle_radians)
+
+    @classmethod
+    def from_scale(cls, scale_factor, center=None):
+       # TODO: Optimise
+       return cls.identity().scale(scale_factor, center)
+
+    @classmethod
+    def from_translation(cls, vector):
+        return cls(1, 0, 0, 0, 1, 0, 0, 0, 1, vector[0], vector[1], vector[2])
+
+    def __init__(self, a=0, d=0, g=0, b=0, e=0, h=0, c=0, f=0, i=0, tx=0, ty=0, tz=0):
+        self._m = ((a, d, g, tx),
+                   (b, e, h, ty),
+                   (c, f, i, tz))
+
+    @property
+    def a(self):
+        return self._m[0][0]
+
+    @property
+    def b(self):
+        return self._m[1][0]
+
+    @property
+    def c(self):
+        return self._m[2][0]
+
+    @property
+    def d(self):
+        return self._m[0][1]
+
+    @property
+    def e(self):
+        return self._m[1][1]
+
+    @property
+    def f(self):
+        return self._m[2][1]
+
+    @property
+    def g(self):
+        return self._m[0][2]
+
+    @property
+    def h(self):
+        return self._m[1][2]
+
+    @property
+    def i(self):
+        return self._m[2][2]
+
+    @property
+    def tx(self):
+        # TODO: The name should reflect the space
+        return self._m[0][3]
+
+    @property
+    def ty(self):
+        # TODO: The name should reflect the space
+        return self._m[1][3]
+
+    @property
+    def tz(self):
+        # TODO: The name should reflect the space
+        return self._m[2][3]
+
+    def __eq__(self, rhs):
+        if not isinstance(rhs, Transform3):
+            return NotImplemented
+        return self._m == rhs._m
+
+    def __ne__(self, rhs):
+        return not self == rhs
+
+    def __repr__(self):
+        return '{}(a={}, d={}, g={}, b={}, e={}, h={}, c={}, f={}, i={}, tx={}, ty={}, tz={})'.format(
+            self.__class__.__name__,
+            self.a, self.d, self.g, self.b, self.e, self.h, self.c, self.f, self.i, self.tx, self.ty, self.tz)
+
+    def __mul__(self, rhs):
+        if not isinstance(rhs, Transform3):
+            return NotImplemented
+
+        a1 = self.a
+        b1 = self.b
+        c1 = self.c
+
+        d1 = self.d
+        e1 = self.e
+        f1 = self.f
+
+        g1 = self.g
+        h1 = self.h
+        i1 = self.i
+
+        tx1 = self.tx
+        ty1 = self.ty
+        tz1 = self.tz
+
+
+        a2 = rhs.a
+        b2 = rhs.b
+        c2 = rhs.c
+
+        d2 = rhs.d
+        e2 = rhs.e
+        f2 = rhs.f
+
+        g2 = rhs.g
+        h2 = rhs.h
+        i2 = rhs.i
+
+        tx2 = rhs.tx
+        ty2 = rhs.ty
+        tz2 = rhs.tz
+
+        a = a1 * a2 + d1 * b2 + g1 * c2
+        b = b1 * a2 + e1 * b2 + h1 * c2
+        c = c1 * a2 + f1 * b2 + i1 * c2
+
+        d = a1 * d2 + d1 * e2 + g1 * f2
+        e = b1 * d2 + e1 * e2 + h1 * f2
+        f = c1 * d2 + f1 * e2 + i1 * f2
+
+        g = a1 * g2 + d1 * h2 + g1 * i2
+        h = b1 * g2 + e1 * h2 + h1 * i2
+        i = c1 * g2 + f1 * h2 + i1 * i2
+
+        tx = a1 * tx2 + d1 * ty2 + g1 * tz2 + tx1
+        ty = b1 * tx2 + e1 * ty2 + h1 * tz2 + ty1
+        tz = c1 * tx2 + f1 * ty2 + i1 * tz2 + tz1
+
+        return Transform3(a=a, b=b, c=c, d=d, e=e, f=f, g=g, h=h, i=i, tx=tx, ty=ty, tz=tz)
+
+    # TODO: __rmul__
+
+    def translate(self, vector):
+        tx = vector.x * self.a + vector.y * self.b + vector.z * self.c
+        ty = vector.x * self.d + vector.y * self.e + vector.z * self.f
+        tz = vector.x * self.g + vector.y * self.h + vector.z * self.i
+        return self.replace(tx=tx, ty=ty, tz=tz)
+
+    def scale(self, scale_factor, center=None):
+        s = Vector3(scale_factor, scale_factor, scale_factor) if isinstance(scale_factor, Real) else scale_factor
+
+        if center is None:
+            return self.replace(a=self.a * s.x,
+                                d=self.d * s.x,
+                                g=self.g * s.x,
+                                b=self.b * s.y,
+                                e=self.e * s.y,
+                                h=self.h * s.y,
+                                c=self.c * s.z,
+                                f=self.f * s.z,
+                                i=self.i * s.z)
+
+        v = center.vector()
+        return self.translate(v).scale(scale_factor).translate(-v)
+
+
+    def replace(self, **kwargs):
+        return Transform3(
+            a=kwargs.get('a', self.a),
+            d=kwargs.get('d', self.d),
+            g=kwargs.get('g', self.g),
+            b=kwargs.get('b', self.b),
+            e=kwargs.get('e', self.e),
+            h=kwargs.get('h', self.h),
+            c=kwargs.get('c', self.c),
+            f=kwargs.get('f', self.f),
+            i=kwargs.get('i', self.i),
+            tx=kwargs.get('tx', self.tx),
+            ty=kwargs.get('ty', self.ty),
+            tz=kwargs.get('tz', self.tz))
+
+    # def __call__(self, obj):
+    #     """Transform obj"""
+    #     return transform3(obj, self)
+
+    def rotate(self, angle_radians, axis_vector=None):
+        return self.from_rotation(angle_radians, axis_vector) * self
+
+    # TODO: Use axis names
+    def rotate_z(self, psi):
+        cos_psi = math.cos(psi)
+        sin_psi = math.sin(psi)
+        return Transform3(
+            a=cos_psi,
+            d=sin_psi,
+            b=-sin_psi,
+            e=cos_psi,
+            i=1
+        ) * self
+
+    def rotate_x(self, theta):
+        cos_theta = math.cos(theta)
+        sin_theta = math.sin(theta)
+        return Transform3(
+            a=1,
+            e=cos_theta,
+            f=-sin_theta,
+            h=sin_theta,
+            i=cos_theta
+        ) * self
+
+    def rotate_y(self, phi):
+        cos_phi = math.cos(phi)
+        sin_phi = math.sin(phi)
+        return Transform3(
+            a=cos_phi,
+            c=-sin_phi,
+            e=1,
+            g=sin_phi,
+            i=cos_phi
+        ) * self
+
+    def is_identity(self):
+        return self.a == 1 and self.d == 0 and self.c == 0 and self.b == 0 and self.e == 1 and self.h == 0 and self.c == 0 and self.f == 0 and self.i == 1 and self.tx == 0 and self.tx == 0 and self.tz == 0
+
+IDENTITY_TRANSFORM3 = Transform3(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+
+
+@singledispatch
+def transform3(obj, transform):
+    raise NotImplemented("Transformation of {!r} not implemented".format(obj))
+
+
+@transform3.register(Point3)
+def _(point, transform):
+    return Point3(point.x * transform.a + point.y * transform.b + point.z * transform.c + transform.tx,
+                  point.x * transform.d + point.y * transform.e + point.z * transform.f + transform.ty,
+                  point.x * transform.g + point.y * transform.h + point.z * transform.i + transform.tz)
+
+
+@transform3.register(Vector3)
+def _(vector, transform):
+    return Vector3(vector.x * transform.a + vector.y * transform.b + vector.z * transform.c,
+                   vector.x * transform.d + vector.y * transform.e + vector.z * transform.f,
+                   vector.x * transform.g + vector.y * transform.h + vector.z * transform.i)
+
+
+@transform3.register(Direction3)
+def _(direction, transform):
+    return Direction3(direction.x * transform.a + direction.y * transform.b + direction.z * transform.c,
+                      direction.x * transform.d + direction.y * transform.e + direction.z * transform.f,
+                      direction.x * transform.g + direction.y * transform.h + direction.z * transform.i)
+
+
+@transform3.register(Segment3)
+def _(segment, transform):
+    return Segment3(transform3(segment.source, transform),
+                    transform3(segment.target, transform))

@@ -27,9 +27,6 @@ class Sense(Enum):
     counterclockwise = +1
 
 
-
-
-
 def determinant_2(d00, d01, d10, d11):
     return d00 * d11 - d10 * d01
 
@@ -95,6 +92,9 @@ class Point2(Cartesian2):
     def __iter__(self):
         return iter(self._p)
 
+    def items(self):
+        return zip(self.space, self._p)
+
     def __sub__(self, rhs):
         if not isinstance(rhs, (Point2, Vector2)):
             return NotImplemented
@@ -150,7 +150,7 @@ class Point2(Cartesian2):
     def __repr__(self):
         return "{}({})".format(
             self.__class__.__name__,
-            ', '.join('{}={}'.format(axis, coord) for axis, coord in zip(self.space, self._p)))
+            ', '.join('{}={}'.format(*item) for item in self.items()))
 
     def bounding_box(self):
         return Box2(self, self)
@@ -163,6 +163,12 @@ class Point2(Cartesian2):
     def vector(self):
         """Returns the position vector."""
         return Vector2(*self._p, space=self.space)
+
+    def intersects(self, obj):
+        return _intersects_point2(obj, self)
+
+    def intersection(self, obj):
+        return _intersection_with_point2(obj, self)
 
 
 class Vector2(Cartesian2):
@@ -209,9 +215,6 @@ class Vector2(Cartesian2):
 
     def __iter__(self):
         return iter(self._d)
-
-    def items(self):
-        return zip(self.space, self._d)
 
     def __add__(self, rhs):
         if not isinstance(rhs, Vector2):
@@ -352,6 +355,8 @@ class Direction2(Cartesian2):
             dy = kwargs[y_name] if y_name in kwargs else args[1]
         except IndexError:
             raise TypeError("A least {} coordinates must be provided".format(self.dimensionality))
+        if dx == dy == 0:
+            raise ValueError("Degenerate {}".format(self.__class__.__name__))
         self._d = (dx, dy)
 
     def __getattr__(self, axis):
@@ -541,17 +546,6 @@ class Box2(Cartesian2):
         if self.intersects(point):
             return 0
         return min(edge.distance_to(point) for edge in self.edges())
-
-@singledispatch
-def _intersects_box2(obj, box):
-    raise NotImplementedError("Intersection between {!r} and {!r} not supported".format(box, obj))
-
-
-@_intersects_box2.register(Point2)
-def _(point, box):
-    if point.space != box.space:
-        raise SpaceMismatchError("{!r} is not in the same space as {!r}".format(point, box))
-    return all(box.min[c] <= point[c] <= box.max[c] for c in box.dimensionality)
 
 
 class Line2(Cartesian2):
@@ -788,6 +782,12 @@ class Line2(Cartesian2):
     def has_on_negative_side(self, point):
         return self.side(point) == OrientedSide.Negative
 
+    def intersection(self, obj):
+        return _intersection_with_line2(obj, self)
+
+    def intersects(self, obj):
+        return _intersects_line2(obj, self)
+
     def __eq__(self, rhs):
         if self is rhs:
             return True
@@ -1000,6 +1000,9 @@ class Segment2(Cartesian2):
             return None
         return self.source + t * v
 
+    def intersects(self, obj):
+        return _intersects_segment2(obj, self)
+
     def __eq__(self, rhs):
         if not isinstance(rhs, Segment2):
             return NotImplemented
@@ -1044,9 +1047,7 @@ class Triangle2(Cartesian2):
         return self._p[2]
 
     def vertices(self):
-        yield self.a
-        yield self.b
-        yield self.c
+        return iter(self._p)
 
     def __iter__(self):
         return iter(self._p)
@@ -1155,7 +1156,7 @@ class Triangle2(Cartesian2):
         return self.edge_c().length()
 
     def perimeter(self):
-        return self.length_a() + self.length_b() + self.length_c()
+        return sum(self.edges())
 
     def angle_a(self):
         return self._angle_from_side_vectors(self.b - self.a, self.c - self.a)
@@ -1246,7 +1247,7 @@ class Triangle2(Cartesian2):
         return r, s, t
 
     def intersects(self, obj):
-        return _intersects_triangle(obj, self)
+        return _intersects_triangle2(obj, self)
 
     def __eq__(self, rhs):
         if not isinstance(rhs, Triangle2):
@@ -1263,27 +1264,6 @@ class Triangle2(Cartesian2):
 
     def __repr__(self):
         return '{}({!r}, {!r}, {!r})'.format(self.__class__.__name__, self.a, self.b, self.c)
-
-
-@singledispatch
-def _intersects_triangle(obj, triangle):
-    raise NotImplementedError("Intersection between {!r} and {!r} not supported".format(triangle, obj))
-
-
-@_intersects_triangle.register(Point2)
-def _(point, triangle):
-    r, s, t = triangle.cartesian_to_barycentric(point)
-    return sign(r) == sign(s) == sign(t) == 1
-
-
-@_intersects_triangle.register(Line2)
-def _(line, triangle):
-    return all_equal(sign(line.a * v[0] + line.b * v[1] + line.c) for v in triangle.vertices())
-
-
-@_intersects_triangle.register(Segment2)
-def _(segment, triangle):
-    return any(segment.intersects(edge) for edge in triangle.edges())
 
 
 class Circle2(Cartesian2):
@@ -1332,21 +1312,133 @@ class Circle2(Cartesian2):
     def __hash__(self):
         return hash((self.space, self._center, self._radius))
 
-@singledispatch
-def _intersects_circle2(obj, circle):
-    raise NotImplementedError("Intersection between {!r} and {!r} not supported".format(circle, obj))
 
-@_intersects_circle2.register(Circle2)
-def _(circle1, circle2):
-    return circle1.radius + circle2.radius >= (circle1.center - circle2.center).magnitude()
+class Quadrilateral2(Cartesian2):
 
-@_intersects_circle2.register(Point2)
-def _(point, circle):
-    return (point - circle.center).magnitude() <= circle.radius
+    def __init__(self, a, b, c, d):
+        if not (a.space == b.space == c.space == d.space):
+            raise SpaceMismatchError("{!r}, {!r}, {!r} and {!r} are not in the same space".format(a, b, c, d))
+        super().__init__(a.space)
+        self._p = (a, b, c, d)
+
+    @property
+    def a(self):
+        return self._p[0]
+
+    @property
+    def b(self):
+        return self._p[1]
+
+    @property
+    def c(self):
+        return self._p[2]
+
+    @property
+    def d(self):
+        return self._p[2]
+
+    def vertices(self):
+        return iter(self._p)
+
+    def __iter__(self):
+        return iter(self._p)
+
+    def __getitem__(self, index):
+        return self._p[index]
+
+    def __len__(self):
+        return len(self._p)
+
+    def edge_ab(self):
+        return Segment2(self.a, self.b)
+
+    def edge_bc(self):
+        return Segment2(self.b, self.c)
+
+    def edge_cd(self):
+        return Segment2(self.c, self.d)
+
+    def edge_da(self):
+        return Segment2(self.d, self.a)
+
+    def length_ab(self):
+        return self.edge_ab().length()
+
+    def length_bc(self):
+        return self.edge_bc().length()
+
+    def length_cd(self):
+        return self.edge_cd().length()
+
+    def length_da(self):
+        return self.edge_da().length()
+
+    def perimeter(self):
+        return sum(self.edges())
+
+    def edges(self):
+        yield self.edge_ab()
+        yield self.edge_bc()
+        yield self.edge_cd()
+        yield self.edge_da()
+
+    def angle_a(self):
+        return self._angle_from_side_vectors(self.b - self.a, self.d - self.a)
+
+    def angle_b(self):
+        return self._angle_from_side_vectors(self.c - self.b, self.a - self.b)
+
+    def angle_c(self):
+        return self._angle_from_side_vectors(self.d - self.c, self.b - self.c)
+
+    def angle_d(self):
+        return self._angle_from_side_vectors(self.a - self.d, self.c - self.d)
+
+    def angles(self):
+        yield self.angle_a()
+        yield self.angle_b()
+        yield self.angle_c()
+        yield self.angle_d()
+
+    @staticmethod
+    def _angle_from_side_vectors(p, q):
+        return p.angle(q)
+
+    def diagonal_ac(self):
+        return Segment2(self.a, self.c)
+
+    def diagonal_bd(self):
+        return Segment2(self.b, self.d)
+
+    def is_convex(self):
+        return self.diagonal_ac.intersects(self.diagonal_bd)
+
+    def rectangularity(self):
+        return max(self.angles()) - min(self.angles())
+
+    def is_rectangle(self):
+        return self.rectangularity() == 0
+
+    def __eq__(self, rhs):
+        if not isinstance(rhs, Quadrilateral2):
+            return NotImplemented
+        return self.space == rhs.space and self._p == rhs._p
+
+    def __ne__(self, rhs):
+        if not isinstance(rhs, Quadrilateral2):
+            return NotImplemented
+        return not self == rhs
+
+    def __hash__(self):
+        return hash((self.space, self._p))
+
+    def __repr__(self):
+        return '{}({!r}, {!r}, {!r})'.format(self.__class__.__name__, self.a, self.b, self.c, self.d)
 
 
 class TransformDecompositionError(Exception):
     pass
+
 
 class Transform2:
 
@@ -1445,7 +1537,7 @@ class Transform2:
         return not self == rhs
 
     def __repr__(self):
-        return '{}(a={}, b={}, c={}, d={}, tx={}, ty={})'.format(*self._m)
+        return '{}(a={}, c={}, b={}, d={}, tx={}, ty={})'.format(self.a, self.c, self.b, self.d, self.tx, self.ty)
 
     def __mul__(self, rhs):
         if not isinstance(rhs, Transform2):
@@ -1560,7 +1652,6 @@ class Transform2:
                           tx=self.tx + (tx * a + ty * b),
                           ty=self.ty + (tx * c + ty * d))
 
-    # TODO: rotate_180_degrees, rotate_270_degrees
     def rotate_180_degrees(self, center=None):
         center = Point2(0, 0) if center is None else center
         x = center[0]
@@ -1703,20 +1794,29 @@ Decomposition = namedtuple('Decomposition', ['translation', 'scaling', 'rotation
 def transform2(obj, transform):
     raise NotImplemented("Transformation of {!r} not implemented".format(obj))
 
+
 @transform2.register(Point2)
 def _(point, transform):
     return Point2(point.x * transform.a + point.y * transform.b + transform.tx,
                   point.x * transform.c + point.y * transform.d + transform.ty)
+
 
 @transform2.register(Vector2)
 def _(vector, transform):
     return Vector2(vector.x * transform.a + vector.y * transform.b,
                    vector.x * transform.c + vector.y * transform.d)
 
+
+@transform2.register(Direction2)
+def _(direction, transform):
+    return Vector2(direction.x * transform.a + direction.y * transform.b,
+                   direction.x * transform.c + direction.y * transform.d)
+
 @transform2.register(Segment2)
 def _(segment, transform):
     return Segment2(transform2(segment.source, transform),
                     transform2(segment.target, transform))
+
 
 @transform2.register(Line2)
 def _(line, transform):
@@ -1726,16 +1826,19 @@ def _(line, transform):
     s = transform2(Segment2(p0, p1), transform)
     return s.supporting_line()
 
+
 @transform2.register(Triangle2)
 def _(triangle, transform):
     return Triangle2(transform2(triangle.a, transform),
                      transform2(triangle.b, transform),
                      transform2(triangle.c, transform))
 
+
 @transform2.register(Ray2)
 def _(ray, transform):
     return Ray2(transform2(ray.source, transform),
                 transform2(ray.point, transform))
+
 
 @transform2.register(Box2)
 def _(box, transform):
@@ -1743,3 +1846,153 @@ def _(box, transform):
     # A new axis-aligned Box2 which bounds the transformed box
     return Box2.from_points(transform2(p) for p in box.vertices())
 
+
+def intersection2(a, b):
+    return a.intersection(b)
+
+
+@singledispatch
+def _intersection_with_point2(obj, point):
+    raise NotImplementedError("Intersection between {!r} and {!r} not supported".format(obj, point))
+
+
+@_intersection_with_point2.register(Point2)
+def _(other_point, point):
+    if point == other_point:
+        return point
+    return None
+
+
+@_intersection_with_point2.register(Line2)
+def _(line, point):
+    return _intersection_with_line2(point, line)
+
+
+@singledispatch
+def _intersection_with_line2(obj, line):
+    raise NotImplementedError("Intersection between {!r} and {!r} not implemented.".format(obj, line))
+
+
+@_intersection_with_line2.register(Point2)
+def _(point, line):
+    if line.has_on(point):
+        return point
+    return None
+
+
+@_intersection_with_line2.register(Line2)
+def _(other_line, line):
+    if line == other_line:
+        return line
+    if line.is_parallel_to(other_line):
+        return None
+    a = line.a
+    b = line.b
+    c = line.c
+    d = other_line.a
+    e = other_line.b
+    f = other_line.c
+    x = (c*e - b*f) / (b*d - a*e)
+    y = (a*f - c*d) / (b*d - a*e)
+    return Point2(x, y)
+
+
+def intersects2(a, b):
+    return a.intersects(b)
+
+
+@singledispatch
+def _intersects_point2(obj, point):
+    raise NotImplementedError("Intersection between {!r} and {!r} not supported".format(obj, point))
+
+
+@_intersects_point2.register(Point2)
+def _(other_point, point):
+    return point == other_point
+
+
+@_intersects_point2.register(Line2)
+def _(line, point):
+    return _intersects_line2(point, line)
+
+
+@singledispatch
+def _intersects_box2(obj, box):
+    raise NotImplementedError("Intersection between {!r} and {!r} not supported".format(box, obj))
+
+
+@_intersects_box2.register(Point2)
+def _(point, box):
+    if point.space != box.space:
+        raise SpaceMismatchError("{!r} is not in the same space as {!r}".format(point, box))
+    return all(box.min[c] <= point[c] <= box.max[c] for c in box.dimensionality)
+
+
+@singledispatch
+def _intersects_line2(obj, line):
+    raise NotImplementedError("Intersection between {!r} and {!r} not supported".format(line, obj))
+
+
+@_intersects_line2.register(Line2)
+def _(other_line, line):
+    return not line.is_parallel_to(other_line)
+
+
+@_intersects_line2.register(Point2)
+def _(point, line):
+    return line.has_on(point)
+
+
+@singledispatch
+def _intersects_segment2(obj, segment):
+    raise NotImplementedError("Intersection between {!r} and {!r} not supported".format(segment, obj))
+
+
+@_intersects_segment2.register(Segment2)
+def _(segment_p, segment_q):
+    if segment_p == segment_q:
+        return True
+    if segment_p == segment_q.reversed():
+        return True
+    # TODO Collinear overlapping case
+
+    line_p = segment_p.supporting_line()
+    line_q = segment_q.supporting_line()
+    return  line_p.side(segment_q.source) != line_p.side(segment_q.target) \
+        and line_q.side(segment_p.source) != line_q.side(segment_p.source)
+
+
+@singledispatch
+def _intersects_triangle2(obj, triangle):
+    raise NotImplementedError("Intersection between {!r} and {!r} not supported".format(triangle, obj))
+
+
+@_intersects_triangle2.register(Point2)
+def _(point, triangle):
+    r, s, t = triangle.cartesian_to_barycentric(point)
+    return sign(r) == sign(s) == sign(t) == 1
+
+
+@_intersects_triangle2.register(Line2)
+def _(line, triangle):
+    return all_equal(sign(line.a * v[0] + line.b * v[1] + line.c) for v in triangle.vertices())
+
+
+@_intersects_triangle2.register(Segment2)
+def _(segment, triangle):
+    return any(segment.intersects(edge) for edge in triangle.edges())
+
+
+@singledispatch
+def _intersects_circle2(obj, circle):
+    raise NotImplementedError("Intersection between {!r} and {!r} not supported".format(circle, obj))
+
+
+@_intersects_circle2.register(Circle2)
+def _(circle1, circle2):
+    return circle1.radius + circle2.radius >= (circle1.center - circle2.center).magnitude()
+
+
+@_intersects_circle2.register(Point2)
+def _(point, circle):
+    return (point - circle.center).magnitude() <= circle.radius
