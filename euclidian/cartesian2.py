@@ -304,6 +304,9 @@ class Vector2(Cartesian2):
     def angle(self, rhs):
         return math.atan2(abs(self.determinant(rhs)), self.dot(rhs))
 
+    def atan2(self):
+        return math.atan2(self._d[1], self._d[0])
+
     def components(self):
         """Decompose into two component vectors parallel to the basis vectors.
 
@@ -368,6 +371,9 @@ class Direction2(Cartesian2):
 
     def vector(self):
         return Vector2(self._d[0], self._d[1], space=self.space)
+
+    def atan2(self):
+        return math.atan2(self._d[1], self._d[0])
 
     def __eq__(self, rhs):
         if not isinstance(rhs, Direction2):
