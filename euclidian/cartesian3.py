@@ -32,6 +32,18 @@ class Point3(Cartesian3):
         return cls(vector[0], vector[1], vector[2], space=s)
 
     @classmethod
+    def from_subspace_point(cls, point2, space=None, **kwargs):
+        s = space if space is not None else Cartesian3.DEFAULT_AXES
+        v_args = dict(point2.items())
+        return cls(space=s, **v_args, **kwargs)
+
+    @classmethod
+    def from_subspace_vector(cls, vector2, space=None, **kwargs):
+        s = space if space is not None else Cartesian3.DEFAULT_AXES
+        v_args = dict(vector2.items())
+        return cls(space=s, **v_args, **kwargs)
+
+    @classmethod
     def as_midpoint(cls, p, q):
         if p.space != q.space:
             raise SpaceMismatchError("{!r} and {!r} are in different spaces".format(p, q))
@@ -66,6 +78,15 @@ class Point3(Cartesian3):
 
     def __getitem__(self, index):
         return self._p[index]
+
+    def __len__(self):
+        return len(self._p)
+
+    def __iter__(self):
+        return iter(self._p)
+
+    def items(self):
+        return zip(self.space, self._p)
 
     def __sub__(self, rhs):
         if not isinstance(rhs, (Point3, Vector3)):
@@ -287,6 +308,9 @@ class Vector3(Cartesian3):
                        self._d[2] / m,
                        space=self.space)
 
+    def vector(self):
+        return self
+
     def direction(self):
         return Direction3(self._d[0], self._d[1], self._d[2], space=self.space)
 
@@ -294,9 +318,9 @@ class Vector3(Cartesian3):
         return self._d[0] * rhs._d[0] + self._d[1] * rhs._d[1] + self._d[2] * rhs._d[2]
 
     def cross(self, rhs):
-        return Vector3(self._d[1]*rhs._d[2] - self._d[1]*rhs._d[1],
-                       self._d[1]*rhs._d[1] - self._d[1]*rhs._d[2],
-                       self._d[1]*rhs._d[1] - self._d[1]*rhs._d[1],
+        return Vector3(self._d[1]*rhs._d[2] - self._d[2]*rhs._d[1],
+                       self._d[2]*rhs._d[0] - self._d[0]*rhs._d[2],
+                       self._d[0]*rhs._d[1] - self._d[1]*rhs._d[0],
                        space=self.space)
 
     # def det(self, rhs):
@@ -311,8 +335,19 @@ class Vector3(Cartesian3):
     #     return math.atan2(abs(self.determinant(rhs)), self.dot(rhs))
 
     def angle(self, rhs):
-         theta = math.acos(self.dot(rhs) / (self.magnitude() * rhs.magnitude()))
+         dot = self.dot(rhs)
+         m1 = self.magnitude()
+         m2 = rhs.magnitude()
+         c = dot / (m1 * m2)
+         theta = self.safe_acos(c)
          return theta
+
+    def safe_acos(self, c):
+        if c > 1 and math.isclose(c, 1):
+            c = 1
+        if c < -1 and math.isclose(c, -1):
+            c = -1
+        return math.acos(c)
 
     def components(self):
         """Decompose into three component vectors parallel to the basis vectors.
@@ -339,9 +374,15 @@ class Vector3(Cartesian3):
         return hash((base_hash, self._d))
 
     def __repr__(self):
+        return format(self)
+
+    def __str__(self):
+        return format(self)
+
+    def __format__(self, f):
         return "{}({})".format(
-            self.__class__.__name__,
-            ', '.join('{}={}'.format(*item) for item in self.items()))
+            type(self).__name__,
+            ', '.join('{}={}'.format(key, format(value, f)) for key, value in self.items()))
 
     def subspace(self, subspace_axes):
         """Obtain a two-dimensional subspace representation of this vector.
@@ -361,6 +402,53 @@ class Vector3(Cartesian3):
         return Vector2(self._d[axis_specs[0].index],
                        self._d[axis_specs[1].index],
                        space=[axis_spec.name for axis_spec in axis_specs])
+
+
+class SphericalCoordinates:
+
+    @classmethod
+    def from_direction(cls, direction):
+        u = direction.vector()
+        return cls.from_vector(u)
+
+    @classmethod
+    def from_vector(cls, u):
+        r = u.magnitude()
+        inclination = math.acos(u[2] / r)
+        azimuth = math.atan2(u[1], u[0])
+        return cls(azimuth, inclination)
+
+    @classmethod
+    def from_degrees(cls, azimuth_degrees, elevation_degrees):
+        return cls(radians(azimuth_degrees), radians(elevation_degrees))
+
+    def __init__(self, azimuth_radians, elevation_radians):
+        self._azimuth = azimuth_radians
+        self._elevation = elevation_radians
+
+    @property
+    def azimuth(self):
+        return self._azimuth
+
+
+    @property
+    def elevation(self):
+        return self._elevation
+
+
+    @property
+    def azimuth_degrees(self):
+        return math.degrees(self._azimuth)
+
+
+    @property
+    def elevation_degrees(self):
+        return math.degrees(self._elevation)
+
+
+BASIS_VECTOR3_0 = Vector3(1, 0, 0)
+BASIS_VECTOR3_1 = Vector3(0, 1, 0)
+BASIS_VECTOR3_2 = Vector3(0, 0, 1)
 
 
 class Direction3(Cartesian3):
@@ -408,8 +496,7 @@ class Direction3(Cartesian3):
     def __eq__(self, rhs):
         if not isinstance(rhs, Direction3):
             return NotImplemented
-        # TODO!
-        raise NotImplementedError
+        return math.isclose(self.angle(rhs), 0, abs_tol=1e-7)
 
     def __ne__(self, rhs):
         if not isinstance(rhs, Direction3):
@@ -465,6 +552,9 @@ class Direction3(Cartesian3):
         return Direction2(self._c[axis_specs[0].index],
                           self._c[axis_specs[1].index],
                           space=[axis_spec.name for axis_spec in axis_specs])
+
+    def reverse(self):
+        return Direction3(-self[0], -self[1], -self[2], space=self.space)
 
 
 class Box3(Cartesian3):
@@ -699,6 +789,21 @@ class Line3(Cartesian3):
         projection = self.projection_from(p)
         return self._point.distance_to(projection)
 
+    def shortest_segment_between(self, l2):
+        """A segment between the nearest points on this line and another line.
+        """
+        l1 = self
+        p1 = l1.point()
+        p2 = l2.point()
+        d1 = l1.vector()
+        d2 = l2.vector()
+        n1 = d1.cross(d2)
+        n2 = d2.cross(n1)
+        c1 = p1 + ((p2 - p1).dot(n2)/d1.dot(n2)) * d1
+        c2 = p2 + ((p1 - p2).dor(n1)/d2.dot(n1)) * d2
+        return Segment3(c1, c2)
+
+
     def vector(self):
         """Vector parallel the line"""
         return self._vector
@@ -713,6 +818,8 @@ class Line3(Cartesian3):
         Returns:
             A Point3 on the line.
         """
+        if i == 0:
+            return self._point
         return self._point + i * self._vector
 
     def is_parallel_to(self, line):
@@ -891,6 +998,9 @@ class Segment3(Cartesian3):
     def direction(self):
         return self.vector().direction()
 
+    def reverse(self):
+        return -self
+
     def supporting_line(self):
         return Line3.through_points(*self._p)
 
@@ -912,6 +1022,14 @@ class Segment3(Cartesian3):
                       self.source[1] + t * (self.target[1] - self.source[1]),
                       self.source[2] + t * (self.target[2] - self.source[2]),
                       space=self.space)
+
+    def point_at_distance_from_source(self, distance):
+        t = distance / self.length()
+        return self.lerp(t)
+
+    def point_at_distance_from_target(self, distance):
+        t = 1 - (distance / self.length())
+        return self.lerp(t)
 
     def bounding_box(self):
         return Box3(*self._p)
@@ -1265,29 +1383,41 @@ class Transform3:
     def identity():
         return IDENTITY_TRANSFORM3
 
-    # @classmethod
-    # def from_rotation(cls, angle_radians, axis):
-    #      cos_theta = math.cos(angle_radians)
-    #      sin_theta = math.sin(angle_radians)
-    #
-    #      unit_axis = axis.unit()
-    #      l = unit_axis[0]
-    #      m = unit_axis[1]
-    #      n = unit_axis[2]
-    #
-    #      a = l*l*(1 - cos_theta) + cos_theta
-    #      b = l*m*(1 - cos_theta) + n*sin_theta
-    #      c = l*n*(1 - cos_theta) - m*sin_theta
-    #
-    #      d = m*l*(1 - cos_theta) - n*sin_theta
-    #      e = m*m*(1 - cos_theta) + cos_theta
-    #      f = m*n*(1 - cos_theta) + l*sin_theta
-    #
-    #      g = n*l*(1 - cos_theta) + m*sin_theta
-    #      h = n*m*(1 - cos_theta) - l*sin_theta
-    #      i = n*n*(1 - cos_theta) + cos_theta
-    #
-    #      return cls(a, d, g, b, e, h, c, f, i, 0, 0, 0)
+    @classmethod
+    def from_orthonormal_basis_vectors(
+            cls,
+            to_basis_0: Vector3,
+            to_basis_1: Vector3,
+            to_basis_2: Vector3,
+            from_basis_0=BASIS_VECTOR3_0,
+            from_basis_1=BASIS_VECTOR3_1,
+            from_basis_2=BASIS_VECTOR3_2,
+    ):
+        # Works for C node
+        # a = Vector3.dot(to_basis_0, from_basis_0)
+        # d = Vector3.dot(to_basis_0, from_basis_1)
+        # g = Vector3.dot(to_basis_0, from_basis_2)
+        # b = Vector3.dot(to_basis_1, from_basis_0)
+        # e = Vector3.dot(to_basis_1, from_basis_1)
+        # h = Vector3.dot(to_basis_1, from_basis_2)
+        # c = Vector3.dot(to_basis_2, from_basis_0)
+        # f = Vector3.dot(to_basis_2, from_basis_1)
+        # i = Vector3.dot(to_basis_2, from_basis_2)
+
+        # Works for B node
+        a = Vector3.dot(from_basis_0, to_basis_0)
+        d = Vector3.dot(from_basis_0, to_basis_1)
+        g = Vector3.dot(from_basis_0, to_basis_2)
+        b = Vector3.dot(from_basis_1, to_basis_0)
+        e = Vector3.dot(from_basis_1, to_basis_1)
+        h = Vector3.dot(from_basis_1, to_basis_2)
+        c = Vector3.dot(from_basis_2, to_basis_0)
+        f = Vector3.dot(from_basis_2, to_basis_1)
+        i = Vector3.dot(from_basis_2, to_basis_2)
+        
+        return cls(a, d, g, b, e, h, c, f, i)
+
+
 
 
     @classmethod
