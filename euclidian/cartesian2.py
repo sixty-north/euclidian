@@ -216,6 +216,9 @@ class Vector2(Cartesian2):
     def __iter__(self):
         return iter(self._d)
 
+    def items(self):
+        return zip(self.space, self._d)
+
     def __add__(self, rhs):
         if not isinstance(rhs, Vector2):
             return NotImplemented
@@ -1795,6 +1798,14 @@ IDENTITY_TRANSFORM2 = Transform2(1, 0, 0, 1, 0, 0)
 
 # TODO: Ensure these are in the right order, so we can reduce the transformations.
 Decomposition = namedtuple('Decomposition', ['translation', 'scaling', 'rotation', 'shearing'])
+
+def rotate2(obj, angle_radians):
+    t = Transform2.from_rotation(angle_radians)
+    return t(obj)
+
+def rotate_degrees2(obj, angle_degrees):
+    t = Transform2.from_rotation_degrees(angle_degrees)
+    return t(obj)
 
 @singledispatch
 def transform2(obj, transform):
