@@ -1429,7 +1429,7 @@ class Transform3:
          cos_theta = math.cos(angle_radians)
          sin_theta = math.sin(angle_radians)
 
-         unit_axis = axis.unit()
+         unit_axis = axis.vector().unit()
          u = unit_axis[0]
          v = unit_axis[1]
          w = unit_axis[2]
