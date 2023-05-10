@@ -491,6 +491,9 @@ class Direction3(Cartesian3):
     def __getitem__(self, index):
         return self._d[index]
 
+    def direction(self):
+        return self
+
     def vector(self):
         return Vector3(self._d[0], self._d[1], self._d[2], space=self.space)
 
