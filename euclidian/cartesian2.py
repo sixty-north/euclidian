@@ -7,10 +7,9 @@ from functools import singledispatch, total_ordering
 from numbers import Real
 from enum import Enum, unique
 import itertools
-from euclidian import graycode
 from euclidian.cartesian import Cartesian, SpaceMismatchError
 from euclidian.graycode import gray
-from euclidian.util import sign, all_equal, is_zero
+from euclidian.util import sign, all_equal, is_zero, typename
 
 
 @unique
@@ -428,7 +427,8 @@ class Box2(Cartesian2):
         for index, point in enumerate(iterator, start=1):
             if point.space != space:
                 raise SpaceMismatchError(
-                    "Point at index {i} {!r} is not in the same space as first {!r}".format(index, point, first))
+                    f"Point at index {index} {point!r} is not in the same space as first {first!r}"
+                )
             min_x = min(min_x, point[0])
             min_y = min(min_y, point[1])
             max_x = max(max_x, point[0])
@@ -458,8 +458,9 @@ class Box2(Cartesian2):
         for index, bounded in enumerate(iterator, start=1):
             if bounded.space != space:
                 raise SpaceMismatchError(
-                    "Bounded object at index {i} {!r} is not in the same space as first {!r}".format(index, bounded,
-                                                                                                     first))
+                    "Bounded object at index {index} {bounded!r} "
+                    "is not in the same space as first {first!r}"
+                )
 
             bbox = bounded.bounding_box()
             min_x = min(min_x, bbox.min[0])
@@ -1083,20 +1084,14 @@ class Triangle2(Cartesian2):
         return Point2(x, y, space=self.space)
 
     def circumcenter(self):
-        if hasattr(self, '_circumcenter'):
-            return self._circumcenter
-
         if abs(self.a[1] - self.b[1]) < sys.float_info.epsilon and abs(self.b[1] - self.c[1]) < sys.float_info.epsilon:
             raise ArithmeticError("Cannot compute circumcenter for degenerate triangle")
 
         if abs(self.b[1] - self.a[1]) < sys.float_info.epsilon:
-            self._circumcenter = self._circumcenter_1()
+            return self._circumcenter_1()
         elif abs(self.c[1] - self.b[1]) < sys.float_info.epsilon:
-            self._circumcenter = self._circumcenter_2()
-        else:
-            self._circumcenter = self._circumcenter_3()
-
-        return self._circumcenter
+            return self._circumcenter_2()
+        return self._circumcenter_3()
 
     def _circumcenter_3(self):
         a = self.a
@@ -1413,19 +1408,19 @@ class Quadrilateral2(Cartesian2):
     def _angle_from_side_vectors(p, q):
         return p.angle(q)
 
-    def diagonal_ac(self):
+    def diagonal_ac(self) -> Segment2:
         return Segment2(self.a, self.c)
 
-    def diagonal_bd(self):
+    def diagonal_bd(self) -> Segment2:
         return Segment2(self.b, self.d)
 
     def is_convex(self):
-        return self.diagonal_ac.intersects(self.diagonal_bd)
+        return self.diagonal_ac().intersects(self.diagonal_bd)
 
-    def rectangularity(self):
+    def rectangularity(self) -> float:
         return max(self.angles()) - min(self.angles())
 
-    def is_rectangle(self):
+    def is_rectangle(self) -> bool:
         return self.rectangularity() == 0
 
     def __eq__(self, rhs):
@@ -1546,7 +1541,13 @@ class Transform2:
         return not self == rhs
 
     def __repr__(self):
-        return '{}(a={}, c={}, b={}, d={}, tx={}, ty={})'.format(self.a, self.c, self.b, self.d, self.tx, self.ty)
+        return (
+            f"{typename(self)}("
+            f"a={self.a}, c={self.c}, "
+            f"b={self.b}, d={self.d}, "
+            f"tx={self.tx}, ty={self.ty}"
+            f")"
+        )
 
     def __mul__(self, rhs):
         if not isinstance(rhs, Transform2):
@@ -1641,6 +1642,7 @@ class Transform2:
         return self.rotate(math.radians(angle_degrees), center)
 
     def rotate_0_degrees(self, center=None):
+        _ = center  # Keep the linter happy
         return self
 
     def rotate_90_degrees(self, center=None):
@@ -1809,7 +1811,7 @@ def rotate_degrees2(obj, angle_degrees):
 
 @singledispatch
 def transform2(obj, transform):
-    raise NotImplemented("Transformation of {!r} not implemented".format(obj))
+    raise NotImplemented(f"Transformation of {obj!r} by {transform} not implemented")
 
 
 @transform2.register(Point2)
@@ -1861,7 +1863,7 @@ def _(ray, transform):
 def _(box, transform):
     # Not strictly a transformation of the box as such. Returns
     # A new axis-aligned Box2 which bounds the transformed box
-    return Box2.from_points(transform2(p) for p in box.vertices())
+    return Box2.from_points(transform2(p, transform) for p in box.vertices())
 
 
 def intersection2(a, b):

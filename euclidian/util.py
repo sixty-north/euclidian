@@ -1,3 +1,4 @@
+import math
 import sys
 
 
@@ -32,3 +33,16 @@ def almost_equal(x, y, epsilon=sys.float_info.epsilon):
     e = epsilon * max_xy_one
     delta = abs(x - y)
     return delta <= e
+
+
+def safe_acos(
+    c):
+    if c > 1 and math.isclose(c, 1):
+        c = 1
+    if c < -1 and math.isclose(c, -1):
+        c = -1
+    return math.acos(c)
+
+
+def typename(obj):
+    return type(obj).__name__

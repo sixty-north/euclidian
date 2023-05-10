@@ -7,7 +7,7 @@ import sys
 from euclidian.cartesian import SpaceMismatchError, Cartesian
 from euclidian.cartesian2 import determinant_2, Box2, Point2, Vector2, Direction2
 from euclidian.graycode import gray
-from euclidian.util import sign, is_zero, all_equal
+from euclidian.util import sign, is_zero, all_equal, safe_acos
 
 
 class Cartesian3(Cartesian):
@@ -328,7 +328,7 @@ class Vector3(Cartesian3):
     #     """If det (the determinant) is positive the angle between A (this) and B (rhs) is positive (counter-clockwise).
     #     If the determinant is negative the angle goes clockwise. Finally, if the determinant is 0, the
     #     vectors point in the same direction. In Schneider & Eberly this operator is called Kross.
-    #     Is is also often known as PerpDot.
+    #     It is also often known as PerpDot.
     #     """
     #     return determinant_2(self._d[0], self._d[1], rhs._d[0], rhs._d[1])
 
@@ -340,15 +340,8 @@ class Vector3(Cartesian3):
          m1 = self.magnitude()
          m2 = rhs.magnitude()
          c = dot / (m1 * m2)
-         theta = self.safe_acos(c)
+         theta = safe_acos(c)
          return theta
-
-    def safe_acos(self, c):
-        if c > 1 and math.isclose(c, 1):
-            c = 1
-        if c < -1 and math.isclose(c, -1):
-            c = -1
-        return math.acos(c)
 
     def components(self):
         """Decompose into three component vectors parallel to the basis vectors.
@@ -559,7 +552,7 @@ class Direction3(Cartesian3):
         m = b.magnitude()
         s = d / m
         return s
-x
+
     def vector_projection(self, b):
         """The projection of a vector onto this direction.
 
@@ -635,7 +628,8 @@ class Box3(Cartesian3):
         for index, point in enumerate(iterator, start=1):
             if point.space != space:
                 raise SpaceMismatchError(
-                    "Point at index {i} {!r} is not in the same space as first {!r}".format(index, point, first))
+                    f"Point at index {index} {point!r} is not in the same space as first {first!r}"
+                )
             min_x = min(min_x, point[0])
             min_y = min(min_y, point[1])
             min_z = min(min_z, point[2])
@@ -671,8 +665,9 @@ class Box3(Cartesian3):
         for index, bounded in enumerate(iterator, start=1):
             if bounded.space != space:
                 raise SpaceMismatchError(
-                    "Bounded object at index {i} {!r} is not in the same space as first {!r}".format(index, bounded,
-                                                                                                     first))
+                    "Bounded object at index {index} {bounded!r} "
+                    "is not in the same space as first {first!r}"
+                )
 
             bbox = bounded.bounding_box()
             min_x = min(min_x, bbox.min[0])
@@ -987,7 +982,7 @@ class Ray3(Cartesian3):
         """Project a point onto this ray.
 
         Args:
-            point: The point to be projected.
+            p: The point to be projected.
 
         Return:
             The perpendicular projection of point onto this ray, or None.
@@ -1051,9 +1046,6 @@ class Segment3(Cartesian3):
     def direction(self):
         return self.vector().direction()
 
-    def reverse(self):
-        return -self
-
     def supporting_line(self):
         return Line3.through_points(*self._p)
 
@@ -1070,7 +1062,8 @@ class Segment3(Cartesian3):
         return Segment3(self.target, self.source)
 
     def lerp(self, t):
-        # TODO: Consider using this version which is more numerically stable lerp(p0, p1, t) = p0 * (1 - t) + p1 * t
+        # TODO: Consider using this version which is more numerically stable
+        #       lerp(p0, p1, t) = p0 * (1 - t) + p1 * t
         return Point3(self.source[0] + t * (self.target[0] - self.source[0]),
                       self.source[1] + t * (self.target[1] - self.source[1]),
                       self.source[2] + t * (self.target[2] - self.source[2]),
@@ -1110,7 +1103,7 @@ class Segment3(Cartesian3):
         """Project a point onto this segment.
 
         Args:
-            point: The point to be projected.
+            p: The point to be projected.
 
         Return:
             The perpendicular projection of point onto this segment, or None.
@@ -1336,8 +1329,11 @@ class Plane3(Cartesian3):
         return y
 
     def _solve_for_0(self, *args, **kwargs):
-        """Solve for axis 0 (the x axis) providing coordinates for axis 1 and axis 2 as either positional or
-        named arguments consistent with space axis naming."""
+        """Solve for axis 0 (the x-axis) providing coordinates for axis 1 and axis 2.
+
+        Coordinates may be provided as either positional or named arguments consistent with space
+        axis naming.
+        """
         y, z = self._parse_solve_args(args, kwargs, 1, 2)
         a, b, c, d = self._c
         if b == 0:
@@ -1515,7 +1511,6 @@ class Transform3:
 
     @classmethod
     def from_scale(cls, scale_factor, center=None):
-       # TODO: Optimise
        return cls.identity().scale(scale_factor, center)
 
     @classmethod
@@ -1736,7 +1731,7 @@ IDENTITY_TRANSFORM3 = Transform3(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
 
 @singledispatch
 def transform3(obj, transform):
-    raise NotImplemented("Transformation of {!r} not implemented".format(obj))
+    raise NotImplemented(f"Transformation of {obj!r} by {transform} not implemented")
 
 
 @transform3.register(Point3)
