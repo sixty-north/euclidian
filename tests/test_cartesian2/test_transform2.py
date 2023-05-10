@@ -19,7 +19,7 @@ class TestTransform2(unittest.TestCase):
         transform = Transform2.from_translation((tx, ty))
         before = Point2(px, py)
         after = transform(before)
-        self.assertEquals(after, Point2(px+tx, py+ty))
+        self.assertEqual(after, Point2(px+tx, py+ty))
 
     @given(px=floats(-1e6, 1e6),
            py=floats(-1e6, 1e6),
