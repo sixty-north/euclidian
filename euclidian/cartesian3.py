@@ -3,6 +3,7 @@ import math
 import itertools
 from numbers import Real
 import sys
+
 from euclidian.cartesian import SpaceMismatchError, Cartesian
 from euclidian.cartesian2 import determinant_2, Box2, Point2, Vector2, Direction2
 from euclidian.graycode import gray
@@ -1414,7 +1415,7 @@ class Transform3:
         c = Vector3.dot(from_basis_2, to_basis_0)
         f = Vector3.dot(from_basis_2, to_basis_1)
         i = Vector3.dot(from_basis_2, to_basis_2)
-        
+
         return cls(a, d, g, b, e, h, c, f, i)
 
 
