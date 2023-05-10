@@ -421,7 +421,7 @@ class SphericalCoordinates:
 
     @classmethod
     def from_degrees(cls, azimuth_degrees, elevation_degrees):
-        return cls(radians(azimuth_degrees), radians(elevation_degrees))
+        return cls(math.radians(azimuth_degrees), math.radians(elevation_degrees))
 
     def __init__(self, azimuth_radians, elevation_radians):
         self._azimuth = azimuth_radians
