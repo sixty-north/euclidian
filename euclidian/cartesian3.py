@@ -492,6 +492,9 @@ class Direction3(Cartesian3):
             raise AttributeError("Axis '{}' not recognized.".format(axis))
         return self._d[i]
 
+    def __len__(self):
+        return 3
+
     def __getitem__(self, index):
         return self._d[index]
 
