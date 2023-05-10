@@ -542,18 +542,50 @@ class Direction3(Cartesian3):
     def angle(self, rhs):
         return self.vector().angle(rhs.vector())
 
-    def scalar_projection(self, vector):
-        """Scalar projection onto this direction."""
-        return self.vector().unit().dot(vector)
+    def scalar_projection(self, b):
+        """Scalar projection of a vector onto this direction.
 
-    def vector_projection(self, vector):
-        """The projection of a vector onto this direction.
+        Args:
+            b: The vector to project onto this direction.
+
+        Returns:
+            The length of the projection of b onto this direction. If this direction
+            and the direction of b are in the same hemisphere, the result will be positive.
+            If b is perpendicular to this direction the result will be zero. If this direction
+            and the direction of b are in opposite hemispheres, the result will be negative.
         """
-        unit = self.vector().unit()
-        return unit.dot(vector) * unit
+        a = self.vector().unit()
+        d = a.dot(b)
+        m = b.magnitude()
+        s = d / m
+        return s
 
-    def vector_rejection(self, vector):
-        return vector - self.vector_projection(vector)
+    def vector_projection(self, b):
+        """The projection of a vector onto this direction.
+
+        Args:
+            b: The vector to project onto this direction.
+
+        Returns:
+            A vector with the length of the projection of b onto this
+            direction. If this direction and the direction of b are in the same hemisphere, the
+            result will be parallel to this direction. If b is perpendicular to this direction,
+            the result will be degenerate. If this direction and the direction of b are in opposite
+            hemispheres, the result will be anti-parallel with this direction.
+        """
+        return self.scalar_projection(b) * self.vector().unit()
+
+    def vector_rejection(self, b):
+        """The projection of a vector onto a place perpendicular to this vector.
+
+        Args:
+            b: The vector to project onto the perpendicular plane.
+
+        Returns:
+            The projection of b onto a plane perpendicular to this vector. If b is parallel or
+            anti-parallel to this vector, the result is degenerate.
+        """
+        return b - self.vector_projection(b)
 
     def subspace(self, subspace_axes):
         """Obtain a two-dimensional subspace representation of this vector.
