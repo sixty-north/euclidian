@@ -504,7 +504,16 @@ class Direction3(Cartesian3):
     def __eq__(self, rhs):
         if not isinstance(rhs, Direction3):
             return NotImplemented
-        return math.isclose(self.angle(rhs), 0, abs_tol=1e-7)
+        u = self.vector().unit()
+        v = rhs.vector().unit()
+        return u.angle(v) == 0
+
+    def isclose(self, rhs, *, abs_tol=None):
+        if abs_tol is None:
+            abs_tol = 1e15
+        if not isinstance(rhs, Direction3):
+            raise TypeError("Can only compare to another Direction3")
+        return math.isclose(self.vector().unit().angle(rhs.vector().unit()), 0, abs_tol=abs_tol)
 
     def __ne__(self, rhs):
         if not isinstance(rhs, Direction3):
@@ -519,7 +528,8 @@ class Direction3(Cartesian3):
 
     def __hash__(self):
         base_hash = super().__hash__()
-        return hash((base_hash, self._d))
+        u = self.vector().unit()  # Normalize so equal directions have equal hashes
+        return hash((base_hash, u._d))
 
     def __repr__(self):
         return "{}({})".format(
