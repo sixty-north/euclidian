@@ -456,6 +456,10 @@ class Direction3(Cartesian3):
     __slots__ = ['_d']
 
     @classmethod
+    def orthogonal_to(cls, v, w):
+        return v.vector().cross(w.vector()).direction()
+
+    @classmethod
     def between_points(cls, p, q):
         return (q - p).direction()
 
