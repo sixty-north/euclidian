@@ -559,7 +559,7 @@ class Direction3(Cartesian3):
         m = b.magnitude()
         s = d / m
         return s
-
+x
     def vector_projection(self, b):
         """The projection of a vector onto this direction.
 
@@ -571,7 +571,7 @@ class Direction3(Cartesian3):
             direction. If this direction and the direction of b are in the same hemisphere, the
             result will be parallel to this direction. If b is perpendicular to this direction,
             the result will be degenerate. If this direction and the direction of b are in opposite
-            hemispheres, the result will be anti-parallel with this direction.
+            hemispheres, the result will be antiparallel with this direction.
         """
         return self.scalar_projection(b) * self.vector().unit()
 
@@ -583,7 +583,7 @@ class Direction3(Cartesian3):
 
         Returns:
             The projection of b onto a plane perpendicular to this vector. If b is parallel or
-            anti-parallel to this vector, the result is degenerate.
+            antiparallel to this vector, the result is degenerate.
         """
         return b - self.vector_projection(b)
 
