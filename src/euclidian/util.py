@@ -42,7 +42,3 @@ def safe_acos(
     if c < -1 and math.isclose(c, -1):
         c = -1
     return math.acos(c)
-
-
-def typename(obj):
-    return type(obj).__name__
