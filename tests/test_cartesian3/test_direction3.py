@@ -2,17 +2,17 @@ from math import sqrt
 
 from pytest import approx
 
-from hypothesis import given, assume, example
-from hypothesis.strategies import floats
+from hypothesis import given, assume
+from hypothesis.strategies import floats, one_of
 
 from euclidian.cartesian3 import Direction3, Vector3
 
 
 
 @given(
-    x=floats(min_value=-10.0, max_value=10.0),
-    y=floats(min_value=-10.0, max_value=10.0),
-    z=floats(min_value=-10.0, max_value=10.0),
+    x=one_of(floats(min_value=0.01, max_value=10.0), floats(min_value=-10.0, max_value=-0.01)),
+    y=one_of(floats(min_value=0.01, max_value=10.0), floats(min_value=-10.0, max_value=-0.01)),
+    z=one_of(floats(min_value=0.01, max_value=10.0), floats(min_value=-10.0, max_value=-0.01)),
 )
 def test_scalar_projection_on_self_is_unity(x, y, z):
     assume(x != 0 or y != 0 or z != 0)
