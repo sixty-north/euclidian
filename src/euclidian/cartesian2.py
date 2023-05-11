@@ -3,13 +3,15 @@ import operator
 import sys
 import math
 
+
+from typename import typename
 from functools import singledispatch, total_ordering
 from numbers import Real
 from enum import Enum, unique
 import itertools
 from euclidian.cartesian import Cartesian, SpaceMismatchError
 from euclidian.graycode import gray
-from euclidian.util import sign, all_equal, is_zero, typename
+from euclidian.util import sign, all_equal, is_zero
 
 
 @unique
